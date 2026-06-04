@@ -1,0 +1,10 @@
+# 下载的视频文件
+downloads/
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+.idea/

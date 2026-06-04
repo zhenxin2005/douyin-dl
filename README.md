@@ -8,6 +8,7 @@
 - 无水印 MP4 下载
 - 零外部依赖（仅需 Python 内置的 `requests` 库）
 - 跨平台：Linux / macOS / Windows
+- 支持打包为独立 `.exe`，无需安装 Python 也能用
 
 ---
 
@@ -132,19 +133,22 @@ python C:\tools\douyin-dl.py "https://v.douyin.com/xxxx/"
 
 视频会下载到 `C:\tools\downloads\` 目录。
 
-**进阶：创建桌面快捷方式（双击运行）**
+**进阶①：使用批处理文件（双击运行）**
 
-新建一个 `下载抖音.bat` 文件，内容如下：
+项目中已包含 `下载抖音.bat`，双击即可运行：
 
-```batch
-@echo off
-chcp 65001 >nul
-set /p url=请输入抖音链接:
-python C:\tools\douyin-dl.py "%url%"
-pause
-```
+1. 将整个 `scripts/` 文件夹复制到 `C:\tools\` 下
+2. 双击 `下载抖音.bat`
+3. 粘贴抖音链接，回车下载
 
-双击这个 `.bat` 文件，粘贴链接即可下载。
+**进阶②：打包成独立 .exe（无需安装 Python）**
+
+如果想分享给完全不懂技术的朋友，可以打包成一个 `.exe` 文件：
+
+1. 在 Windows 上安装 Python（一次性）
+2. 双击 `打包成exe.bat`
+3. 在 `dist/` 目录下得到 `douyin-dl.exe`
+4. 把这个 `.exe` 复制到任何 Windows 电脑，双击即用，**Python 都不需要装**
 
 ---
 

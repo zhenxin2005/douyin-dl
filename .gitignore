@@ -1,6 +1,9 @@
 # 下载的视频文件
 downloads/
 
+# Claude Code 本地配置（不要上传）
+.claude/settings.local.json
+
 # Python
 __pycache__/
 *.pyc

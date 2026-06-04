@@ -1,14 +1,27 @@
 #!/usr/bin/env python3
 """
 抖音视频下载脚本
-用法: python3 douyin-dl.py <douyin_url> [output_dir]
 
-支持:
-  - https://v.douyin.com/xxx/       (短链)
-  - https://www.douyin.com/video/xxx (长链)
+用法:
+  # 单个视频
+  python3 douyin-dl.py <douyin_url>
+
+  # 批量下载（多个链接）
+  python3 douyin-dl.py <url1> <url2> <url3> ...
+
+  # 从文件读取链接列表
+  python3 douyin-dl.py urls.txt
+
+  # 指定输出目录
+  python3 douyin-dl.py <url> [output_dir]
+
+支持链接格式:
+  - https://v.douyin.com/xxx/             (短链)
+  - https://www.douyin.com/video/xxx      (长链)
   - https://www.iesdouyin.com/share/video/xxx (分享链)
 
-输出: 无水印 MP4 视频文件
+urls.txt 格式:
+  一行一个链接，忽略空行和 # 注释行
 """
 
 import sys
@@ -137,65 +150,223 @@ def format_size(size_bytes: int) -> str:
 
 
 # ============================================================
+# URL 提取
+# ============================================================
+
+DOUYIN_URL_PATTERN = re.compile(
+    r"https?://(?:v\.douyin\.com|www\.douyin\.com|www\.iesdouyin\.com)/\S+"
+)
+
+
+def extract_url(text: str) -> str:
+    """
+    从复制文本中提取抖音链接。
+    支持直接粘贴抖音口令文本，自动识别其中的链接。
+    """
+    text = text.strip()
+
+    # 如果已经是纯 URL
+    if text.startswith("http"):
+        return text
+
+    # 从混合文本中提取
+    match = DOUYIN_URL_PATTERN.search(text)
+    if match:
+        return match.group(0).rstrip("/")
+
+    # 没找到 URL，原样返回（让后续报错）
+    return text
+
+
+# ============================================================
+# URL 收集
+# ============================================================
+
+
+def load_urls_from_file(filepath: str) -> list:
+    """从文本文件中读取链接，一行一个，忽略空行和 # 注释"""
+    urls = []
+    with open(filepath, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                urls.append(line)
+    return urls
+
+
+def collect_urls(args: list) -> list:
+    """
+    从命令行参数中收集所有 URL。
+    支持: URL 列表、.txt 文件、混合输入
+    """
+    urls = []
+    for arg in args:
+        if arg.endswith(".txt"):
+            urls.extend(load_urls_from_file(arg))
+        else:
+            urls.append(arg)
+    return urls
+
+
+def is_text_file(path: str) -> bool:
+    return path.endswith(".txt")
+
+
+# ============================================================
+# 单视频下载
+# ============================================================
+
+
+def download_one(url: str, output_dir: str, index: int = 0, total: int = 1) -> tuple:
+    """
+    下载单个视频。
+    返回: (success: bool, info: dict)
+    """
+    tag = f"[{index}/{total}]" if total > 1 else ""
+    prefix = f"\n{tag} " if tag else ""
+
+    try:
+        # Step 1: 获取页面
+        print(f"{prefix}📡 获取: {url[:60]}...")
+        html = fetch_page(url)
+
+        # Step 2: 解析
+        print(f"{prefix}🔎 解析...")
+        info = parse_video_info(html)
+
+        print(f"{prefix}📹 {info['desc']}")
+        print(f"{prefix}👤 {info['author']} | ⏱️ {format_duration(info['duration_ms'])} | 📐 {info['width']}x{info['height']}")
+
+        # Step 3: 下载
+        desc = info["desc"].strip() or info.get("author", "未知") + "_" + info.get("video_id", "unknown")
+        filename = safe_filename(desc) + ".mp4"
+        output_path = os.path.join(output_dir, filename)
+        os.makedirs(output_dir, exist_ok=True)
+
+        print(f"{prefix}⬇️  下载中...")
+        file_size = download_video(info["play_url"], output_path)
+
+        print(f"{prefix}✅ 完成！{format_size(file_size)} → {output_path}")
+
+        info["file_path"] = output_path
+        info["file_size"] = file_size
+        return (True, info)
+
+    except requests.RequestException as e:
+        print(f"{prefix}❌ 网络错误: {e}")
+        return (False, {"url": url, "error": str(e)})
+    except (KeyError, ValueError, json.JSONDecodeError) as e:
+        print(f"{prefix}❌ 解析错误: {e}")
+        return (False, {"url": url, "error": str(e)})
+    except Exception as e:
+        print(f"{prefix}❌ 错误: {e}")
+        return (False, {"url": url, "error": str(e)})
+
+
+# ============================================================
 # 主入口
 # ============================================================
 
 
+def print_usage():
+    print("抖音视频下载工具 - douyin-dl")
+    print()
+    print("用法:")
+    print("  python3 douyin-dl.py <URL>             下载单个视频")
+    print("  python3 douyin-dl.py <URL1> <URL2> ... 批量下载")
+    print("  python3 douyin-dl.py urls.txt          从文件读取链接")
+    print("  python3 douyin-dl.py urls.txt <URL> ...混合输入")
+    print()
+    print("urls.txt 格式: 一行一个链接，# 开头为注释")
+
+
 def main():
     if len(sys.argv) < 2:
-        print("❌ 用法: python3 douyin-dl.py <douyin_url> [output_dir]")
-        print("示例: python3 douyin-dl.py https://v.douyin.com/xxxx/")
+        print_usage()
         sys.exit(1)
 
-    url = sys.argv[1]
-    output_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.join(
+    args = sys.argv[1:]
+
+    # 判断最后一个参数是否是输出目录
+    output_dir = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "downloads"
     )
+    url_args = args
 
-    print(f"🔍 解析抖音链接: {url}")
+    # 如果最后一个参数是一个已存在的目录，把它当输出目录
+    if os.path.isdir(args[-1]):
+        output_dir = args[-1]
+        url_args = args[:-1]
+    elif len(args) >= 2 and not args[-1].startswith("http") and not args[-1].endswith(".txt"):
+        # 可能是用户想指定的输出目录
+        last_is_url = any(kw in args[-1] for kw in ["douyin", "iesdouyin"])
+        if not last_is_url:
+            output_dir = args[-1]
+            url_args = args[:-1]
+
+    # 如果没有任何有效的 URL 参数，报错
+    if not url_args:
+        print("❌ 未提供任何链接")
+        print_usage()
+        sys.exit(1)
+
+    # 收集所有 URL
+    urls = collect_urls(url_args)
+
+    if not urls:
+        print("❌ 未找到任何有效链接")
+        sys.exit(1)
+
+    # 去重（保持顺序），同时对每个参数提取纯 URL
+    seen = set()
+    clean_urls = []
+    for u in urls:
+        clean = extract_url(u)
+        if clean and clean not in seen:
+            seen.add(clean)
+            clean_urls.append(clean)
+
+    urls = clean_urls
+
+    total = len(urls)
+    print(f"📋 共 {total} 个视频待下载")
     print(f"📁 输出目录: {output_dir}")
+    print("=" * 60)
+
+    # 批量下载
+    success_list = []
+    fail_list = []
+
+    for i, url in enumerate(urls, 1):
+        success, info = download_one(url, output_dir, index=i, total=total)
+        if success:
+            success_list.append(info)
+        else:
+            fail_list.append(info)
+
+        # 多视频时，间隔 1 秒防止被限流
+        if i < total:
+            time.sleep(1)
+
+    # 汇总
     print()
+    print("=" * 60)
+    print(f"📊 下载汇总: 成功 {len(success_list)} / 失败 {len(fail_list)} / 总计 {total}")
 
-    try:
-        # Step 1: 获取页面
-        print("📡 获取页面数据...")
-        html = fetch_page(url)
+    if success_list:
+        print(f"\n✅ 成功:")
+        for info in success_list:
+            print(f"  📹 {info['desc']}")
+            print(f"     📁 {info.get('file_path', 'N/A')}")
+            print(f"     📦 {format_size(info.get('file_size', 0))}")
 
-        # Step 2: 解析视频信息
-        print("🔎 解析视频信息...")
-        info = parse_video_info(html)
+    if fail_list:
+        print(f"\n❌ 失败:")
+        for info in fail_list:
+            print(f"  🔗 {info['url'][:80]}")
+            print(f"     ⚠️ {info['error']}")
 
-        print(f"  📹 标题: {info['desc']}")
-        print(f"  👤 作者: {info['author']} (@{info['author_id']})")
-        print(f"  ⏱️  时长: {format_duration(info['duration_ms'])}")
-        print(f"  📐 分辨率: {info['width']}x{info['height']}")
-        print()
-
-        # Step 3: 下载
-        filename = safe_filename(info['desc']) + ".mp4"
-        output_path = os.path.join(output_dir, filename)
-        os.makedirs(output_dir, exist_ok=True)
-
-        print(f"⬇️  下载视频中...")
-        file_size = download_video(info["play_url"], output_path)
-
-        print()
-        print("✅ 下载完成！")
-        print(f"  📁 文件: {output_path}")
-        print(f"  📦 大小: {format_size(file_size)}")
-        print(f"  🎬 无水印 MP4")
-
-    except requests.RequestException as e:
-        print(f"❌ 网络错误: {e}")
-        print("💡 请检查链接是否有效，或稍后重试")
-        sys.exit(1)
-    except (KeyError, ValueError, json.JSONDecodeError) as e:
-        print(f"❌ 解析错误: {e}")
-        print("💡 抖音可能更新了页面结构，请反馈此问题")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ 未知错误: {e}")
-        sys.exit(1)
+    print()
 
 
 if __name__ == "__main__":

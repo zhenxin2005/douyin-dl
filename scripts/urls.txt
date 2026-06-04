@@ -1,0 +1,5 @@
+# 抖音视频批量下载列表
+# 一行一个链接，# 开头为注释
+
+https://v.douyin.com/7_tQgn9ttHI/
+https://v.douyin.com/MntwLAeBQBo/

@@ -1,5 +1,17 @@
-# 抖音视频批量下载列表
-# 一行一个链接，# 开头为注释
-
-https://v.douyin.com/7_tQgn9ttHI/
-https://v.douyin.com/MntwLAeBQBo/
+https://www.douyin.com/video/7643010131768118580
+https://www.douyin.com/video/7641614059170729268
+https://www.douyin.com/video/7650113526291336448
+https://www.douyin.com/video/7649710019495087412
+https://www.douyin.com/video/7647992551076531498
+https://www.douyin.com/video/7647552383362288922
+https://www.douyin.com/video/7646805892318481716
+https://www.douyin.com/video/7646479284218989824
+https://www.douyin.com/video/7646025068715330851
+https://www.douyin.com/video/7645674810357419298
+https://www.douyin.com/video/7644940886161313058
+https://www.douyin.com/video/7644175513346379043
+https://www.douyin.com/video/7643838137155849506
+https://www.douyin.com/video/7643458970853592372
+https://www.douyin.com/video/7642337729581157667
+https://www.douyin.com/video/7642008330294005044
+https://www.douyin.com/video/7637463218604100864
